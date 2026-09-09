@@ -1,0 +1,11 @@
+import { NextResponse } from "next/server";
+import writeXlsxFile from "write-excel-file/node";
+import { DataSource } from "@/generated/prisma/client";
+import { db } from "@/lib/db";
+import { METRIC_REGISTRY } from "@/lib/metrics";
+import { requireTeacherContext } from "@/lib/server/auth";
+
+export async function GET(request: Request) {
+  try { const url = new URL(request.url); const classId = url.searchParams.get("classId") || undefined; const actor = await requireTeacherContext(classId); const lessonFrom = Math.max(1, Number(url.searchParams.get("lessonFrom") ?? 1)); const lessonTo = Math.min(15, Number(url.searchParams.get("lessonTo") ?? 15)); const sourceParam = url.searchParams.get("source"); const source = sourceParam && Object.values(DataSource).includes(sourceParam as DataSource) ? sourceParam as DataSource : undefined; const observations = await db.metricObservation.findMany({ where: { classId: actor.classId, lessonIndex: { gte: lessonFrom, lte: lessonTo }, ...(source ? { source } : {}) }, include: { user: { select: { displayName: true, studentNo: true } } }, orderBy: [{ lessonIndex: "asc" }, { metricKey: "asc" }] }); const rows = [["学生姓名", "学号", "指标编码", "指标名称", "得分", "课次", "阶段", "数据来源", "测评时间"], ...observations.map((item) => [item.user?.displayName ?? "班级汇总", item.user?.studentNo ?? "", item.metricKey, item.metricKey in METRIC_REGISTRY ? METRIC_REGISTRY[item.metricKey as keyof typeof METRIC_REGISTRY].label : item.metricKey, item.value, item.lessonIndex ?? "", item.phase, item.source, item.measuredAt.toISOString()])].map((row, index) => row.map((value) => ({ value, fontWeight: index === 0 ? "bold" as const : undefined, backgroundColor: index === 0 ? "#E6F2EB" : undefined }))); const buffer = await (await writeXlsxFile(rows, { columns: [18, 16, 34, 24, 12, 10, 16, 24, 24].map((width) => ({ width })) })).toBuffer(); return new NextResponse(new Uint8Array(buffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${actor.classRoom.name}-筛选数据.xlsx`)}` } }); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "导出失败" }, { status: 403 }); }
+}

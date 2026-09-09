@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "input": "E:\\yg\\Project\\yws\\smart_v2\\artifacts\\imagegen\\unit-02\\strategy-case-source.png",
+  "output": "E:\\yg\\Project\\yws\\smart_v2\\public\\assets\\global\\props\\strategy-case-v001.png",
+  "background_rgb": [
+    0,
+    255,
+    255
+  ],
+  "threshold": 52.0,
+  "feather_threshold": 108.0,
+  "trimmed": true,
+  "padding": 12,
+  "width": 1009,
+  "height": 977,
+  "transparent_pixels": 829250,
+  "opaque_pixels": 743614
+}

@@ -1,0 +1,22 @@
+export const TELEMETRY_FIELDS = [
+  ["impact.concerns", "关注区域", "点击或可见停留推断，不是眼动追踪"],
+  ["impact.dwell", "区域停留", "页面可见且区域展开的累计秒数"],
+  ["impact.order", "查看顺序", "按有效查看事件排序"],
+  ["impact.waitSeconds", "冲击后等待", "首个查看前等待；未查看时为观察窗口下界"],
+  ["impact.emotion", "教学模拟指数", "由操作频率、切换及等待估算，不是心理测量"],
+  ["decision.choice", "决策选择", "确认后锁定；未作答为 null"],
+  ["decision.elapsedMs", "决策用时", "从共同开始到确认的有效毫秒数，暂停扣除"],
+  ["decision.inDeadline", "限时内完成", "只有实际确认提交才为 true"],
+  ["decision.label", "路径反馈", "教学路径标签，不是人格或心理诊断"],
+  ["framework.answers", "三层归类", "每题最后归类及是否完成"],
+  ["framework.retries", "归类重试", "各题提交次数减一"],
+  ["framework.completedMs", "全部归类用时", "从首次提交到全部完成的有效毫秒数；未完成为 null"],
+  ["map.signals", "三层变化地图", "学生填写的文字、层级与顺序"],
+  ["map.priorities", "信号优先级", "立即调整 / 持续观察"],
+  ["map.independentMs", "独立填写观察时长", "首次有效保存至提交，截断于独立阶段结束；不是键盘活跃时长，未采到为 null"],
+  ["map.representative", "小组代表", "依据已提交地图及研讨阶段推选产生"],
+  ["map.groupInteractions", "组内互动次数", "首次查看每位组员地图及成功推选操作计数"],
+  ["vote.choice", "调整时机投票", "A / B / C；超时或提前收束未答为 null"],
+  ["vote.elapsedMs", "投票用时", "共同投票开始至点击的有效毫秒数，暂停扣除"],
+] as const;
+export function escapeHtml(value: unknown) { return String(value ?? "—").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!); }

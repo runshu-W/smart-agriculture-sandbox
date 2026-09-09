@@ -1,0 +1,127 @@
+import { test, expect } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { Pool } from "pg";
+test.use({ channel: process.env.PLAYWRIGHT_CHANNEL, viewport: { width: 1440, height: 1080 } });
+test("industry shock plays in sync, survives pause/reload, and saves authorized observations", async ({ browser, baseURL }) => {
+  test.setTimeout(160000);
+  const output = process.env.CLASSROOM_QA_OUTPUT || join(tmpdir(), "smart-impact-qa");
+  await mkdir(output, { recursive: true });
+  const teacher = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1080 } });
+  const student = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 } });
+  const second = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  const outsider = await browser.newContext({ baseURL });
+  let classId = "", id = "";
+  const errors: string[] = [];
+  const consoleErrors: string[] = [];
+  try {
+    const login = async (context: typeof teacher, username: string, portal: string) => expect((await context.request.post("/api/auth/login", { data: { username, password: "SmartAgri2026!", portal } })).status()).toBe(200);
+    await login(teacher, "teacher-demo", "teacher");
+    const stamp = Date.now();
+    const created = await teacher.request.post("/api/teacher/classes", { data: { name: `冲击联调 ${stamp}`, academicYear: "2026-2027", semester: "第一学期" } });
+    expect(created.status()).toBe(201); classId = (await created.json()).id;
+    for (let i = 0; i < 2; i++) expect((await teacher.request.post(`/api/teacher/classes/${classId}/members`, { data: { displayName: i ? "葛同学" : "陈同学", username: `impact_${stamp}_${i}`, studentNo: `I${stamp}${i}` } })).status()).toBe(201);
+    await Promise.all([login(student, `impact_${stamp}_0`, "student"), login(second, `impact_${stamp}_1`, "student"), login(outsider, "student-demo", "student")]);
+    const createdLesson = await teacher.request.post("/api/classroom", { data: { classId, rehearsal: true } });
+    expect(createdLesson.ok()).toBeTruthy(); id = (await createdLesson.json()).id;
+    const api = `/api/classroom/${id}`;
+    const [t, s, m, screen] = await Promise.all([teacher.newPage(), student.newPage(), second.newPage(), teacher.newPage()]);
+    for (const page of [t, s, m, screen]) { page.on("pageerror", error => errors.push(error.message)); page.on("console", message => { if (message.type() === "error" && !/net::ERR_FAILED|Failed to fetch|Failed to load resource/.test(message.text())) consoleErrors.push(message.text()); }); }
+    await screen.setViewportSize({ width: 1920, height: 1080 });
+    await Promise.all([t.goto(`/teacher/classroom/${id}`), s.goto(`/student/classroom/${id}`), m.goto(`/student/classroom/${id}`), screen.goto(`/classroom/${id}/screen`)]);
+    await expect(t).toHaveTitle(/智慧农业/);
+    await expect(t.getByRole("button", { name: "开始冲击", exact: true })).toBeDisabled();
+    await s.getByRole("button", { name: "加入本次课堂" }).click(); await m.getByRole("button", { name: "加入本次课堂" }).click();
+    await expect(s.getByTestId("impact-audience")).toHaveText("3,000");
+    await expect(s.locator(".impact-news")).toHaveCount(0);
+    await s.getByRole("button", { name: "开启声音" }).click();
+    await expect(s.getByRole("button", { name: "关闭声音" })).toBeVisible();
+    const audioDuration = await s.locator("audio").evaluate((audio: HTMLAudioElement) => audio.duration);
+    expect(audioDuration).toBeGreaterThan(5); expect(audioDuration).toBeLessThan(9);
+    await t.screenshot({ path: join(output, "行业冲击-教师待开始.png"), fullPage: true });
+    await t.getByRole("button", { name: "开始课堂", exact: true }).click();
+    await expect(t.getByRole("button", { name: "开始冲击", exact: true })).toBeEnabled();
+    await t.getByRole("button", { name: "开始冲击", exact: true }).click();
+    await t.getByRole("dialog").getByRole("button", { name: "确认", exact: true }).click();
+    await expect(s.locator(".impact-news")).toContainText("成本仅真人1/10");
+    const snapshot = async () => (await teacher.request.get(`${api}?view=teacher`)).json();
+    const command = async (action: string, extra = {}) => { const state = await snapshot(); expect((await teacher.request.patch(api, { data: { action, version: state.version, ...extra } })).status()).toBe(200); };
+    let state = await snapshot();
+    expect((await teacher.request.patch(api, { data: { action: "impact-start", version: state.version } })).status()).toBe(409);
+    expect((await student.request.patch(api, { data: { action: "impact-start", version: state.version } })).status()).toBe(403);
+    await expect.poll(async () => Number((await s.getByTestId("impact-audience").innerText()).replaceAll(",", ""))).toBeLessThan(3000);
+    await command("pause");
+    await expect(s.locator(".impact-pause-label")).toContainText("已暂停");
+    const frozen = await s.getByTestId("impact-audience").innerText();
+    await s.waitForTimeout(1000); expect(await s.getByTestId("impact-audience").innerText()).toBe(frozen);
+    await s.reload(); await expect(s.getByTestId("impact-audience")).toHaveText(frozen);
+    await expect(s.getByRole("button", { name: "开启声音" })).toBeVisible();
+    await s.getByRole("button", { name: "开启声音" }).click();
+    await command("resume");
+    await expect(s.getByTestId("impact-audience")).toHaveText("200", { timeout: 12000 });
+    await expect(s.locator(".impact-call p")).toContainText("再没人买就烂地里了", { timeout: 8000 });
+    await expect.poll(() => s.locator("audio").evaluate((audio: HTMLAudioElement) => !audio.paused), { timeout: 5000 }).toBe(true);
+    await command("pause");
+    await expect.poll(() => s.locator("audio").evaluate((audio: HTMLAudioElement) => audio.paused)).toBe(true);
+    await screen.screenshot({ path: join(output, "行业冲击-来电大屏.png") });
+    await command("resume");
+    await expect(s.locator(".impact-chat p")).toHaveCount(2, { timeout: 12000 });
+    await expect(s.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing", { timeout: 10000 });
+    await student.route("**/api/classroom/*/impact", route => route.abort());
+    await s.locator(".impact-news").click();
+    await expect(s.getByRole("dialog")).toContainText("24小时直播");
+    await s.waitForTimeout(700);
+    await s.getByRole("button", { name: "继续观察", exact: true }).click();
+    await expect(s.locator(".impact-observation")).toContainText("记录保留在本机", { timeout: 6000 });
+    await s.reload();
+    await expect(s.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing");
+    await expect(s.locator(".impact-observation .viewed")).toContainText(["AI上线新闻"]);
+    await student.unroute("**/api/classroom/*/impact");
+    await expect(s.locator(".impact-observation")).toContainText("观察记录已同步", { timeout: 12000 });
+    await s.locator(".impact-call").click(); await s.getByRole("button", { name: "继续观察", exact: true }).click();
+    await student.route("**/api/classroom/*/impact", route => route.abort());
+    await s.locator(".impact-chat").click(); await s.getByRole("button", { name: "继续观察", exact: true }).click();
+    await command("stage", { stage: 1 });
+    await expect(s.getByTestId("current-stage")).toHaveText("路径参考");
+    await s.reload();
+    const recoveredUpload = s.waitForResponse(response => response.url().endsWith(`${api}/impact`) && response.status() === 200, { timeout: 12000 });
+    await student.unroute("**/api/classroom/*/impact"); await recoveredUpload;
+    await command("stage", { stage: 0 });
+    await expect(s.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing");
+    await command("pause");
+    await expect(screen.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing");
+    for (const page of [t, s, m, screen]) await expect(page.locator(".classroom-status")).toHaveText("课堂已暂停");
+    await t.screenshot({ path: join(output, "行业冲击-教师全景.png"), fullPage: true });
+    await s.screenshot({ path: join(output, "行业冲击-学生观察.png"), fullPage: true });
+    await screen.screenshot({ path: join(output, "行业冲击-大屏全景.png") });
+    await m.screenshot({ path: join(output, "行业冲击-手机全景.png"), fullPage: true });
+    for (const page of [s, m, screen]) expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    const batch = { batchId: crypto.randomUUID(), observations: [{ region: "news", kind: "view", atMs: 27000, durationMs: 0 }] };
+    expect((await student.request.post(`${api}/impact`, { data: batch })).status()).toBe(200);
+    expect((await student.request.post(`${api}/impact`, { data: batch })).status()).toBe(200);
+    expect((await outsider.request.post(`${api}/impact`, { data: batch })).status()).toBe(403);
+    expect((await teacher.request.post(`${api}/impact`, { data: batch })).status()).toBe(403);
+    expect((await student.request.post(`${api}/impact`, { data: { ...batch, observations: [{ ...batch.observations[0], atMs: 86400000 }] } })).status()).toBe(400);
+    if (process.env.DATABASE_URL) {
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      try {
+        const result = await pool.query('SELECT "id", "source", "payload", "userId" FROM "LearningEvent" WHERE "liveLessonId"=$1 AND "eventType"=\'IMPACT_OBSERVED\'', [id]);
+        expect(result.rows.filter(row => row.id.endsWith(batch.batchId))).toHaveLength(1);
+        expect(result.rows.length).toBeGreaterThan(1);
+        expect(result.rows.some(row => row.payload.observations.some((item: { region: string; kind: string }) => item.region === "team" && item.kind === "view"))).toBe(true);
+        for (const row of result.rows) { expect(row.source).toBe("classroom-rehearsal"); expect(row.payload.psychologicalAssessment).toBe(false); }
+      } finally { await pool.end(); }
+    }
+    state = await snapshot(); const beforeReset = state.impact.elapsedMs;
+    await command("reset", { minutes: 7 }); expect((await snapshot()).impact.elapsedMs).toBe(beforeReset);
+    await command("stage", { stage: 1 }); await command("stage", { stage: 0 });
+    await expect(s.getByTestId("impact-audience")).toHaveText("200");
+    await expect(s.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing");
+    expect(errors).toEqual([]); expect(consoleErrors).toEqual([]);
+  } finally {
+    if (id) { const state = await (await teacher.request.get(`/api/classroom/${id}?view=teacher`)).json(); if (state.version && state.status !== "ENDED") await teacher.request.patch(`/api/classroom/${id}`, { data: { action: "end", version: state.version } }); }
+    if (classId) await teacher.request.patch(`/api/teacher/classes/${classId}`, { data: { isArchived: true } });
+    await Promise.all([teacher.close(), student.close(), second.close(), outsider.close()]);
+  }
+});

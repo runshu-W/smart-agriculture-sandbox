@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "input": "E:\\yg\\Project\\yws\\smart_v2\\artifacts\\imagegen\\unit-04\\ai-assistant-source.png",
+  "output": "E:\\yg\\Project\\yws\\smart_v2\\public\\assets\\unit-04\\characters\\ai-assistant-v001.png",
+  "background_rgb": [
+    255,
+    0,
+    255
+  ],
+  "threshold": 50.0,
+  "feather_threshold": 110.0,
+  "trimmed": true,
+  "padding": 24,
+  "width": 974,
+  "height": 1222,
+  "transparent_pixels": 1178764,
+  "opaque_pixels": 394100
+}

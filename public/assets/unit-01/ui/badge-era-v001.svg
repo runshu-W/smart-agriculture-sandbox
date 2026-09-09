@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" role="img" aria-labelledby="title desc">
+  <title id="title">时代认知徽章图案</title>
+  <desc id="desc">由木犁纹路、麦穗和数字电路组成的农业时代演进图案。</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M66 130c18-5 29-20 36-45 7 25 18 40 36 45" stroke="#0D5E45" stroke-width="8"/>
+    <path d="M101 88v57M92 104l-14-9M110 105l14-10M91 119l-15-5M111 120l15-5" stroke="#168A58" stroke-width="6"/>
+    <path d="M54 144h42l-19 17M58 142l-12-18" stroke="#7B4A0E" stroke-width="7"/>
+    <path d="M116 77v-16h19v-14M116 91h30M145 91v19h14" stroke="#2377B7" stroke-width="6"/>
+  </g>
+  <g fill="#2377B7">
+    <circle cx="135" cy="47" r="5"/><circle cx="146" cy="91" r="5"/><circle cx="159" cy="110" r="5"/>
+  </g>
+</svg>

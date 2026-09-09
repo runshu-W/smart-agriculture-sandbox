@@ -1,0 +1,66 @@
+{
+  "status": "开发与本地自动验收通过",
+  "date": "2026-09-09",
+  "checks": {
+    "unitTests": 60,
+    "classroomE2EScenarios": 7,
+    "coreRegressionScenarios": 4,
+    "lintErrors": 0,
+    "existingLintWarnings": [
+      "prisma.config.ts: databaseUrl 未使用"
+    ],
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "assetAudit": {
+      "files": 99,
+      "references": 93
+    }
+  },
+  "concurrency": [
+    {
+      "browser": "msedge",
+      "students": 25,
+      "samples": 100,
+      "latencyMs": {
+        "min": 179,
+        "median": 187,
+        "p95": 192,
+        "max": 192,
+        "mean": 186
+      },
+      "within500ms": 100,
+      "mapsSaved": 25,
+      "votesSaved": 25,
+      "scope": "本机 Next 开发服务与隔离 PostgreSQL，25 个独立登录的真实 SSE 连接；轻量测试页接收，非25台真实设备"
+    },
+    {
+      "browser": "chrome",
+      "students": 25,
+      "samples": 100,
+      "latencyMs": {
+        "min": 174,
+        "median": 179,
+        "p95": 186,
+        "max": 186,
+        "mean": 178
+      },
+      "within500ms": 100,
+      "mapsSaved": 25,
+      "votesSaved": 25,
+      "scope": "本机 Next 开发服务与隔离 PostgreSQL，25 个独立登录的真实 SSE 连接；轻量测试页接收，非25台真实设备"
+    }
+  ],
+  "visualQA": [
+    "Chrome、Edge实际浏览器",
+    "1920×1080大屏",
+    "390×844触屏手机尺寸",
+    "1024×768触屏平板尺寸"
+  ],
+  "limits": [
+    "平板为桌面浏览器尺寸及触屏模拟，未验证真实Android设备。",
+    "25人延迟为本机开发服务的独立SSE会话实测，不代表校园网或多进程生产部署。",
+    "地图阶段使用隔离测试课堂时钟加速验证；10秒投票真实等待及暂停恢复已验证。",
+    "教师现场试讲尚未执行。"
+  ],
+  "database": "独立 nxz-review-20260909；未重置原数据库；新增迁移20260910001000_classroom_completion"
+}

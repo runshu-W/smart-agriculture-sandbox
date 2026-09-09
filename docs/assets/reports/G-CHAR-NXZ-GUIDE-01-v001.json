@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "input": "E:\\yg\\Project\\yws\\smart_v2\\tmp\\imagegen\\nongxiaozhi-guide-v001-source.png",
+  "output": "E:\\yg\\Project\\yws\\smart_v2\\public\\assets\\global\\characters\\nongxiaozhi\\guide-v001.png",
+  "background_rgb": [
+    255,
+    0,
+    255
+  ],
+  "threshold": 42.0,
+  "feather_threshold": 105.0,
+  "trimmed": true,
+  "padding": 32,
+  "width": 844,
+  "height": 1375,
+  "transparent_pixels": 1157272,
+  "opaque_pixels": 415592
+}

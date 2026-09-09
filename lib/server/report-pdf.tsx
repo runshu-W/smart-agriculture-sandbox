@@ -1,0 +1,54 @@
+import { PLATFORM_NAME } from "@/lib/brand";
+import "server-only";
+import path from "node:path";
+import React from "react";
+import { Circle, Document, Font, Page, Polygon, Polyline, Rect, StyleSheet, Svg, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import type { getTeacherAnalytics, getTeacherDashboard, getTeacherStudentDashboard } from "@/lib/server/dashboards";
+
+Font.register({ family: "NotoSansSC", src: path.join(process.cwd(), "public", "assets", "fonts", "NotoSansSC-VF.ttf") });
+
+const styles = StyleSheet.create({
+  page: { padding: 28, fontFamily: "NotoSansSC", color: "#21372d", fontSize: 9, backgroundColor: "#f6f8f7" },
+  cover: { padding: 46, justifyContent: "center", fontFamily: "NotoSansSC", color: "#173d2e", backgroundColor: "#eef5f0" },
+  eyebrow: { color: "#237451", fontSize: 10, marginBottom: 8 }, title: { fontSize: 24, marginBottom: 8 }, subtitle: { color: "#607269", fontSize: 10, marginBottom: 24 },
+  footer: { position: "absolute", left: 28, right: 28, bottom: 16, flexDirection: "row", justifyContent: "space-between", color: "#7a8981", fontSize: 7 },
+  kpis: { flexDirection: "row", gap: 8, marginBottom: 14 }, kpi: { flex: 1, backgroundColor: "white", borderLeft: "3 solid #2b845c", padding: 10 }, kpiValue: { fontSize: 18, color: "#1c6d4a" },
+  sectionTitle: { fontSize: 15, marginBottom: 4 }, sectionNote: { color: "#65756d", marginBottom: 10 }, grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, chart: { width: "48.8%", height: 145, padding: 9, backgroundColor: "white", border: "1 solid #dce5e0" }, chartTitle: { fontSize: 10, marginBottom: 2 }, source: { color: "#2b7b58", fontSize: 7, marginBottom: 5 }, chartValue: { color: "#576a61", fontSize: 8, marginTop: 3 },
+  table: { backgroundColor: "white", marginTop: 8 }, tableRow: { flexDirection: "row", borderBottom: "1 solid #e1e7e3", padding: 6 }, tableHead: { backgroundColor: "#e6f1eb" }, cell: { flex: 1 },
+  badgeRow: { flexDirection: "row", gap: 6, marginTop: 8 }, badge: { flex: 1, padding: 8, backgroundColor: "white", textAlign: "center" }, earned: { backgroundColor: "#dcefe3", color: "#1c6d49" },
+});
+
+function Footer({ generatedAt }: { generatedAt: string }) { return <View fixed style={styles.footer}><Text>{PLATFORM_NAME}</Text><Text>生成时间：{generatedAt}</Text></View>; }
+
+function MiniChart({ title, values, source, kind = "line", baseline, target }: { title: string; values: number[]; source: string; kind?: "line" | "bar"; baseline?: number; target?: number }) {
+  const safe = values.length ? values : [0]; const max = Math.max(100, ...safe, target ?? 0); const width = 235; const height = 78; const left = 8; const bottom = 70; const plotWidth = width - 16; const plotHeight = 60;
+  const points = safe.map((value, index) => `${left + (safe.length === 1 ? plotWidth / 2 : index / (safe.length - 1) * plotWidth)},${bottom - value / max * plotHeight}`).join(" ");
+  return <View style={styles.chart}><Text style={styles.chartTitle}>{title}</Text><Text style={styles.source}>数据来源：{source}</Text><Svg height={height} viewBox={`0 0 ${width} ${height}`} width="100%"><Polyline points={`${left},${bottom} ${width - left},${bottom}`} stroke="#c7d2cc" strokeWidth={1} />{baseline !== undefined && <Polyline points={`${left},${bottom - baseline / max * plotHeight} ${width - left},${bottom - baseline / max * plotHeight}`} stroke="#839088" strokeDasharray="4 3" strokeWidth={1} />}{target !== undefined && <Polyline points={`${left},${bottom - target / max * plotHeight} ${width - left},${bottom - target / max * plotHeight}`} stroke="#d4a53a" strokeDasharray="4 3" strokeWidth={1} />}{kind === "line" ? <><Polyline fill="none" points={points} stroke="#27855b" strokeWidth={2} />{safe.map((value, index) => <Circle cx={left + (safe.length === 1 ? plotWidth / 2 : index / (safe.length - 1) * plotWidth)} cy={bottom - value / max * plotHeight} fill="#27855b" key={index} r={2} />)}</> : safe.map((value, index) => { const barWidth = Math.max(5, plotWidth / safe.length - 4); return <Rect fill={index % 2 ? "#d4a43b" : "#318a60"} height={value / max * plotHeight} key={index} width={barWidth} x={left + index / safe.length * plotWidth + 2} y={bottom - value / max * plotHeight} />; })}</Svg><Text style={styles.chartValue}>当前：{safe.at(-1)?.toFixed(1) ?? "-"} · 样本点：{values.length}</Text></View>;
+}
+
+function RadarChart({ values, baseline }: { values: number[]; baseline: number[] }) {
+  const center = 78; const radius = 60; const point = (value: number, index: number) => { const angle = -Math.PI / 2 + index * Math.PI * 2 / 5; const r = radius * value / 100; return `${center + Math.cos(angle) * r},${center + Math.sin(angle) * r}`; };
+  const grid = Array.from({ length: 5 }, (_, index) => point(100, index)).join(" ");
+  return <Svg height={156} viewBox="0 0 156 156" width={156}><Polygon fill="#f2f6f3" points={grid} stroke="#b9c9c0" /><Polygon fill="none" points={baseline.map(point).join(" ")} stroke="#8c9a92" strokeDasharray="4 3" /><Polygon fill="#2d895533" points={values.map(point).join(" ")} stroke="#258258" strokeWidth={2} /></Svg>;
+}
+
+export async function renderClassReport(overview: Awaited<ReturnType<typeof getTeacherDashboard>>, analytics: Awaited<ReturnType<typeof getTeacherAnalytics>>) {
+  const generatedAt = new Date().toLocaleString("zh-CN");
+  const sections = [
+    { title: "砺心提质", note: "心理韧性、情绪管理与抗挫能力", charts: [
+      ["心理韧性增值曲线", analytics.psychological.resilience, "沙盘 / 学习通", "line", analytics.psychological.resilience[0]], ["挫折任务完成率", analytics.psychological.frustration, "沙盘", "bar"], ["情绪调节策略分布", analytics.psychological.strategyDistribution, "沙盘 / 学习通", "bar"], ["焦虑自评均分趋势", analytics.psychological.anxiety, "学习通", "line", undefined, 5], ["应对行为类型占比", analytics.psychological.coping.active, "沙盘", "bar"],
+    ] },
+    { title: "明职定向", note: "职业认同、规划能力与合规决策", charts: [
+      ["职业认同增值", analytics.career.radar.map((item) => item.current), "沙盘 / 学习通", "line"], ["规划书质量分布", analytics.career.planQuality, "教师上传", "bar"], ["合规风险识别率", analytics.career.compliance, "沙盘", "line"], ["决策质量分布", analytics.career.decisions.map((item) => item.quality), "沙盘", "bar"], ["预习任务完成度", analytics.career.preview, "学习通 / 国家职教平台", "line"],
+    ] },
+    { title: "筑基强责", note: "政治认同、公共参与与责任担当", charts: [
+      ["乡村振兴价值认同", analytics.values.rural, "沙盘 / 学习通", "line", undefined, 85], ["青年大学习参与率", analytics.values.youth, "教师上传", "line", undefined, 100], ["团队主动担当率", analytics.values.teamwork.active, "沙盘", "bar"], ["实践服务时长", analytics.values.service.map((item) => item.value), "教师上传", "bar"], ["思政资源完成度", analytics.values.ideology, "国家职教平台", "line"],
+    ] },
+  ] as const;
+  return renderToBuffer(<Document title={`${overview.classRoom.name}班级报告`}><Page size="A4" style={styles.cover}><Text style={styles.eyebrow}>班级学习分析报告</Text><Text style={styles.title}>{overview.classRoom.name}</Text><Text style={styles.subtitle}>{overview.classRoom.academicYear} · {overview.classRoom.semester} · 第 {analytics.lessons[0] ?? 1}-{analytics.lessons.at(-1) ?? 15} 课</Text><View style={styles.kpis}><View style={styles.kpi}><Text>班级人数</Text><Text style={styles.kpiValue}>{overview.kpis.studentCount}</Text></View><View style={styles.kpi}><Text>活跃人数</Text><Text style={styles.kpiValue}>{overview.kpis.activeStudents}</Text></View><View style={styles.kpi}><Text>主线完成率</Text><Text style={styles.kpiValue}>{overview.kpis.completion}%</Text></View><View style={styles.kpi}><Text>五维均值</Text><Text style={styles.kpiValue}>{overview.kpis.literacy}</Text></View></View><Text>本报告与教师后台使用同一统一指标聚合层。关注提示仅用于教学支持，不构成心理诊断。</Text><Footer generatedAt={generatedAt} /></Page>{sections.map((section) => <Page key={section.title} size="A4" style={styles.page}><Text style={styles.sectionTitle}>{section.title}</Text><Text style={styles.sectionNote}>{section.note} · 当前筛选数据来源：{analytics.sources.join(" / ")}</Text><View style={styles.grid}>{section.charts.map(([title, values, source, kind, baseline, target]) => <MiniChart baseline={baseline as number | undefined} key={title} kind={kind as "line" | "bar"} source={source} target={target as number | undefined} title={title} values={[...values]} />)}</View><Footer generatedAt={generatedAt} /></Page>)}</Document>);
+}
+
+export async function renderStudentReport(data: Awaited<ReturnType<typeof getTeacherStudentDashboard>>) {
+  const generatedAt = new Date().toLocaleString("zh-CN"); const current = data.literacy.map((item) => item.current); const baseline = data.literacy.map((item) => item.baseline);
+  return renderToBuffer(<Document title={`${data.student.displayName}成长档案`}><Page size="A4" style={styles.page}><Text style={styles.eyebrow}>学生成长档案</Text><Text style={styles.title}>{data.student.displayName}</Text><Text style={styles.subtitle}>{data.student.studentNo} · {data.classRoom.name} · {data.classRoom.semester}</Text><Text style={styles.sectionTitle}>一、我的素养画像</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}><RadarChart baseline={baseline} values={current} /><View style={{ flex: 1 }}>{data.literacy.map((item) => <View key={item.key} style={styles.tableRow}><Text style={styles.cell}>{item.label}</Text><Text style={styles.cell}>基线 {item.baseline}</Text><Text style={styles.cell}>当前 {item.current}</Text></View>)}</View></View><Text style={styles.sectionTitle}>二、我的成长曲线</Text><MiniChart source="统一指标层" title="五维素养课次均值" values={data.curve.map((item) => Object.values(item.values).reduce((sum, value) => sum + value, 0) / 5)} /><Footer generatedAt={generatedAt} /></Page><Page size="A4" style={styles.page}><Text style={styles.sectionTitle}>三、闯关进度</Text><View style={styles.table}><View style={[styles.tableRow, styles.tableHead]}><Text style={styles.cell}>单元</Text><Text style={styles.cell}>互动</Text><Text style={styles.cell}>进度</Text><Text style={styles.cell}>状态</Text></View>{data.units.map((unit) => <View key={unit.id} style={styles.tableRow}><Text style={styles.cell}>{unit.title}</Text><Text style={styles.cell}>{unit.completed}/{unit.total}</Text><Text style={styles.cell}>{unit.percent}%</Text><Text style={styles.cell}>{unit.status === "COMPLETED" ? "已完成" : unit.status === "IN_PROGRESS" ? "进行中" : "未开始"}</Text></View>)}</View><Text style={[styles.sectionTitle, { marginTop: 18 }]}>徽章墙</Text><View style={styles.badgeRow}>{data.badges.map((badge) => <View key={badge.id} style={[styles.badge, ...(badge.earned ? [styles.earned] : [])]}><Text>{badge.title}</Text><Text>{badge.earned ? "已获得" : "待解锁"}</Text></View>)}</View><Text style={[styles.sectionTitle, { marginTop: 18 }]}>四、云禾英雄榜</Text><Text style={styles.sectionNote}>仅展示本人及相邻名次；班级匿名设置在学生端严格生效。</Text>{data.rankings.literacy.map((item) => <View key={item.userId} style={styles.tableRow}><Text style={styles.cell}>第 {item.rank} 名</Text><Text style={styles.cell}>{item.name}</Text><Text style={styles.cell}>综合素养 {item.literacy}</Text></View>)}<Footer generatedAt={generatedAt} /></Page></Document>);
+}

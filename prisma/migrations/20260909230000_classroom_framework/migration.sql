@@ -1,0 +1,2 @@
+ALTER TYPE "EventType" ADD VALUE 'FRAMEWORK_MAPPED';
+ALTER TABLE "LessonPresence" ADD COLUMN "frameworkProgress" JSONB NOT NULL DEFAULT '{}';

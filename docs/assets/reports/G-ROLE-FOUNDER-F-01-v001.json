@@ -1,0 +1,15 @@
+﻿{
+    "asset_id":  "G-ROLE-FOUNDER-F-01",
+    "ok":  true,
+    "input":  "tmp\\imagegen\\audit-20260726\\founder-f-source.png",
+    "output":  "public/assets/global/roles/founder-f-v001.png",
+    "key_color":  "#FF00FF",
+    "transparent_threshold":  60,
+    "opaque_threshold":  160,
+    "edge_contract":  1,
+    "edge_feather":  0.5,
+    "spill_cleanup":  true,
+    "dimensions":  "562x1542",
+    "corner_alpha":  "0,0,0,0",
+    "qa":  "approved: alpha corners + white/dark/checker composite"
+}

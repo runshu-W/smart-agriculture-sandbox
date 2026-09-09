@@ -1,0 +1,499 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+}
+
+enum AccountStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum DataSource {
+  SIMULATION
+  XUEXITONG
+  NATIONAL_PLATFORM
+  TEACHER_UPLOAD
+}
+
+enum MetricPhase {
+  BASELINE
+  PERIODIC
+  CURRENT
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TEXT
+}
+
+enum ImportStatus {
+  VALIDATED
+  COMMITTED
+  REJECTED
+}
+
+enum ImportRowStatus {
+  VALID
+  INVALID
+  IMPORTED
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum EventType {
+  CLASSROOM_JOINED
+  CLASSROOM_READY
+  IMPACT_OBSERVED
+  PATH_REFERENCE_READ
+  DECISION_RECORDED
+  FRAMEWORK_MAPPED
+  CHANGE_MAP_SAVED
+  CHANGE_MAP_SHARED
+  GROUP_MAP_VIEWED
+  MAP_NOMINATED
+  TIMING_VOTED
+  UNIT_ENTERED
+  INTERACTION_STARTED
+  INTERACTION_ACTION
+  NARRATION_COMPLETED
+  ANSWER_SUBMITTED
+  INTERACTION_COMPLETED
+  TASK_COMPLETED
+  UNIT_COMPLETED
+  CONTENT_SUBMITTED
+  MEDIA_PROGRESSED
+}
+
+model User {
+  liveLessons    LiveLesson[] @relation("LessonTeacher")
+  lessonPresence LessonPresence[]
+  id             String              @id @default(cuid())
+  username       String              @unique
+  displayName    String
+  nickname       String?
+  studentNo      String?             @unique
+  passwordHash   String              @default("")
+  role           Role
+  status         AccountStatus       @default(ACTIVE)
+  enrollments    Enrollment[]
+  taughtClasses  TeacherClass[]
+  authSessions   AuthSession[]
+  sessions       LearningSession[]
+  attempts       Attempt[]
+  progress       Progress[]
+  events         LearningEvent[]
+  scoreSnapshots ScoreSnapshot[]
+  metrics        MetricObservation[]
+  importBatches  ImportBatch[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model ClassRoom {
+  liveLessons          LiveLesson[]
+  id                   String              @id @default(cuid())
+  name                 String
+  academicYear         String              @default("2026-2027")
+  semester             String              @default("第一学期")
+  startsAt             DateTime?
+  endsAt               DateTime?
+  isArchived           Boolean             @default(false)
+  leaderboardAnonymous Boolean             @default(true)
+  enrollments          Enrollment[]
+  teachers             TeacherClass[]
+  sessions             LearningSession[]
+  events               LearningEvent[]
+  metrics              MetricObservation[]
+  importBatches        ImportBatch[]
+  auditLogs            AuditLog[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
+
+model TeacherClass {
+  id        String    @id @default(cuid())
+  teacherId String
+  classId   String
+  teacher   User      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classRoom ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([teacherId, classId])
+}
+
+model AuthSession {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  userId     String
+  classId    String
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classRoom  ClassRoom        @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, classId])
+}
+
+model Unit {
+  id             String            @id
+  title          String
+  description    String            @default("")
+  order          Int
+  isPublished    Boolean           @default(false)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  tasks          Task[]
+  sessions       LearningSession[]
+  progress       Progress[]
+  events         LearningEvent[]
+  scoreSnapshot  ScoreSnapshot[]
+  updatedAt      DateTime          @updatedAt
+}
+
+model Task {
+  id             String          @id
+  unitId         String
+  title          String
+  description    String          @default("")
+  order          Int
+  isPublished    Boolean         @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  unit           Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  interactions   Interaction[]
+  events         LearningEvent[]
+  updatedAt      DateTime        @updatedAt
+}
+
+model Interaction {
+  id             String          @id
+  taskId         String
+  title          String
+  description    String          @default("")
+  type           String
+  order          Int
+  isPublished    Boolean         @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  task           Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  attempts       Attempt[]
+  progress       Progress[]
+  events         LearningEvent[]
+  questions      Question[]
+  updatedAt      DateTime        @updatedAt
+}
+
+model Question {
+  id             String       @id @default(cuid())
+  interactionId  String
+  key            String
+  prompt         String
+  type           QuestionType @default(SINGLE_CHOICE)
+  options        Json
+  correctAnswers Json
+  feedback       Json?
+  order          Int          @default(1)
+  isPublished    Boolean      @default(true)
+  version        Int          @default(1)
+  interaction    Interaction  @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([interactionId, key])
+  @@index([interactionId, order])
+}
+
+model LearningSession {
+  lessonPresence LessonPresence?
+  id        String          @id @default(cuid())
+  userId    String
+  classId   String
+  unitId    String
+  startedAt DateTime        @default(now())
+  endedAt   DateTime?
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classRoom ClassRoom       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  unit      Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  attempts  Attempt[]
+  events    LearningEvent[]
+}
+
+model Attempt {
+  id                  String          @id @default(cuid())
+  userId              String
+  sessionId           String
+  interactionId       String
+  startedAt           DateTime        @default(now())
+  completedAt         DateTime?
+  effectiveDurationMs Int             @default(0)
+  dragSegments        Int             @default(0)
+  answerAttempts      Int             @default(0)
+  firstAnswerCorrect  Boolean?
+  finalAnswerCorrect  Boolean?
+  narrationCompleted  Boolean         @default(false)
+  score               Int             @default(0)
+  actionSummary       Json?
+  selectedAnswers     Json?
+  privateContent      Json?
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session             LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  interaction         Interaction     @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  events              LearningEvent[]
+}
+
+model Progress {
+  id            String         @id @default(cuid())
+  userId        String
+  unitId        String
+  interactionId String
+  status        ProgressStatus @default(NOT_STARTED)
+  bestScore     Int            @default(0)
+  completedAt   DateTime?
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit          Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  interaction   Interaction    @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interactionId])
+}
+
+model LearningEvent {
+  liveLessonId  String?
+  liveLesson    LiveLesson? @relation(fields: [liveLessonId], references: [id], onDelete: SetNull)
+  id            String          @id @default(cuid())
+  userId        String
+  classId       String
+  unitId        String
+  taskId        String
+  interactionId String
+  sessionId     String
+  attemptId     String?
+  eventType     EventType
+  source        String          @default("simulation")
+  occurredAt    DateTime
+  payload       Json
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classRoom     ClassRoom       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  unit          Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  task          Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  interaction   Interaction     @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  session       LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  attempt       Attempt?        @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
+}
+
+enum LessonStatus {
+  WAITING
+  RUNNING
+  PAUSED
+  ENDED
+}
+
+model LiveLesson {
+  id           String @id @default(cuid())
+  classId      String
+  teacherId    String
+  rehearsal    Boolean @default(true)
+  status       LessonStatus @default(WAITING)
+  stage        Int @default(0)
+  durationMs   Int @default(420000)
+  remainingMs  Int @default(420000)
+  deadline     DateTime?
+  version      Int @default(1)
+  impactStartedAt DateTime?
+  impactRunningSince DateTime?
+  impactElapsedMs Int @default(0)
+  impactClosedAt DateTime?
+  impactResultsVisible Boolean @default(false)
+  decisionStartedAt DateTime?
+  decisionRunningSince DateTime?
+  decisionElapsedMs Int @default(0)
+  decisionClosedAt DateTime?
+  decisionCloseReason String?
+  frameworkRunningSince DateTime?
+  frameworkElapsedMs Int @default(0)
+  mapStartedAt DateTime?
+  mapRunningSince DateTime?
+  mapElapsedMs Int @default(0)
+  mapClosedAt DateTime?
+  mapGroups Json @default("{}")
+  mapPresentation Json?
+  voteStartedAt DateTime?
+  voteRunningSince DateTime?
+  voteElapsedMs Int @default(0)
+  voteClosedAt DateTime?
+  signalsVisible Boolean @default(false)
+  createdAt    DateTime @default(now())
+  endedAt      DateTime?
+  classRoom    ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher      User @relation("LessonTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+  participants LessonPresence[]
+  events       LearningEvent[]
+
+  @@index([classId, createdAt])
+}
+
+model LessonPresence {
+  id                String @id @default(cuid())
+  lessonId          String
+  studentId         String
+  learningSessionId String @unique
+  joinedAt          DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  readyAt           DateTime?
+  impactEntryMs     Int @default(0)
+  impactSyncedAt    DateTime?
+  pathsViewed       String[] @default([])
+  decisionEnteredAt DateTime?
+  decisionChoice String?
+  decisionSubmittedAt DateTime?
+  decisionElapsedMs Int?
+  decisionReason String?
+  decisionTrace Json?
+  frameworkProgress Json @default("{}")
+  frameworkFirstMs Int?
+  frameworkCompletedMs Int?
+  mapSignals Json @default("[]")
+  mapVersion Int @default(0)
+  mapSubmittedAt DateTime?
+  mapIndependentMs Int?
+  mapEntryMs Int?
+  mapNominatedId String?
+  groupInteractions Int @default(0)
+  voteEnteredAt DateTime?
+  voteChoice String?
+  voteSubmittedAt DateTime?
+  voteResponseMs Int?
+  voteReason String?
+  lesson            LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student           User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  learningSession   LearningSession @relation(fields: [learningSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, studentId])
+}
+
+model ScoreSnapshot {
+  id                      String   @id @default(cuid())
+  userId                  String
+  unitId                  String
+  baselineCareerAbility   Int      @default(50)
+  baselinePsychological   Int      @default(50)
+  baselineLearningAbility Int      @default(50)
+  baselineTeamwork        Int      @default(50)
+  careerAbility           Int      @default(50)
+  psychological           Int      @default(50)
+  learningAbility         Int      @default(50)
+  teamwork                Int      @default(50)
+  source                  String   @default("simulation")
+  updatedAt               DateTime @updatedAt
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit                    Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, unitId])
+}
+
+model MetricObservation {
+  id            String       @id @default(cuid())
+  userId        String?
+  classId       String
+  unitId        String?
+  metricKey     String
+  value         Float
+  phase         MetricPhase
+  lessonIndex   Int?
+  measuredAt    DateTime
+  source        DataSource
+  importBatchId String?
+  metadata      Json?
+  user          User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classRoom     ClassRoom    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([classId, metricKey, measuredAt])
+  @@index([userId, metricKey, phase])
+}
+
+model ImportBatch {
+  id           String              @id @default(cuid())
+  classId      String
+  createdById  String
+  kind         String
+  source       DataSource
+  fileName     String
+  checksum     String
+  status       ImportStatus
+  totalRows    Int                 @default(0)
+  validRows    Int                 @default(0)
+  invalidRows  Int                 @default(0)
+  errors       Json?
+  committedAt  DateTime?
+  classRoom    ClassRoom           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy    User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  rows         ImportRow[]
+  observations MetricObservation[]
+  createdAt    DateTime            @default(now())
+
+  @@unique([classId, checksum])
+  @@index([classId, createdAt])
+}
+
+model ImportRow {
+  id        String          @id @default(cuid())
+  batchId   String
+  rowNumber Int
+  raw       Json
+  status    ImportRowStatus
+  errors    Json?
+  batch     ImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowNumber])
+}
+
+model AuditLog {
+  id         String     @id @default(cuid())
+  actorId    String
+  classId    String?
+  entityType String
+  entityId   String
+  action     String
+  before     Json?
+  after      Json?
+  actor      User       @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  classRoom  ClassRoom? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  createdAt  DateTime   @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}

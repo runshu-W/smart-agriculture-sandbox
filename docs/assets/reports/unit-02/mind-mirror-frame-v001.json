@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "input": "E:\\yg\\Project\\yws\\smart_v2\\artifacts\\imagegen\\unit-02\\mind-mirror-frame-source.png",
+  "output": "E:\\yg\\Project\\yws\\smart_v2\\public\\assets\\unit-02\\props\\mind-mirror-frame-v001.png",
+  "background_rgb": [
+    255,
+    0,
+    255
+  ],
+  "threshold": 52.0,
+  "feather_threshold": 108.0,
+  "trimmed": true,
+  "padding": 12,
+  "width": 933,
+  "height": 1484,
+  "transparent_pixels": 1187077,
+  "opaque_pixels": 385787
+}

@@ -1,0 +1,24 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Download, FileSpreadsheet, Upload, XCircle } from "lucide-react";
+
+type Batch = { id: string; kind: string; fileName: string; status: "VALIDATED" | "COMMITTED" | "REJECTED"; totalRows: number; validRows: number; invalidRows: number; createdAt: string | Date; rows: Array<{ id: string; rowNumber: number; status: string; raw: unknown; errors: unknown }> };
+type ClassOption = { id: string; name: string };
+const kinds = [{ key: "members", label: "班级成员" }, { key: "literacy", label: "五维素养" }, { key: "xuexitong", label: "学习通" }, { key: "national", label: "国家职教平台" }, { key: "teacher", label: "教师专项指标" }];
+
+export function ImportManager({ batches, classes }: { batches: Batch[]; classes: ClassOption[] }) {
+  const router = useRouter(); const [message, setMessage] = useState(""); const [pending, setPending] = useState(false); const [expanded, setExpanded] = useState<string | null>(batches[0]?.id ?? null);
+  async function upload(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setPending(true); setMessage("正在逐行校验文件…");
+    try { const response = await fetch("/api/teacher/imports", { method: "POST", body: new FormData(event.currentTarget) }); const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "上传失败"); setMessage(data.invalidRows ? `发现 ${data.invalidRows} 行错误，暂未写入` : "校验通过，请确认导入"); router.refresh(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "上传失败"); } finally { setPending(false); }
+  }
+  async function commit(id: string, overwrite = false) {
+    setPending(true); setMessage("正在写入统一指标层…");
+    try { const response = await fetch(`/api/teacher/imports/${id}/commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overwrite }) }); const data = await response.json(); if (!response.ok) { if (data.requiresOverwrite && window.confirm("检测到重复指标。是否覆盖已有同时间数据？")) return void commit(id, true); throw new Error(data.error ?? "导入失败"); } setMessage(data.defaultPassword ? `成员导入完成，初始密码：${data.defaultPassword}` : "指标导入完成，图表已更新"); router.refresh(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "导入失败"); setPending(false); } finally { setPending(false); }
+  }
+  return <div className="import-workspace"><section className="import-panel"><header><FileSpreadsheet /><div><h2>上传并校验</h2><p>文件仅在所有行通过校验后才能正式写入。</p></div></header><form onSubmit={upload}><label>目标班级<select name="classId" required>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>数据类型<select name="kind" required>{kinds.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><label className="file-picker"><Upload /><span>选择 .xlsx 或 .csv 文件</span><input accept=".xlsx,.csv" name="file" type="file" required /></label><button className="primary-button" disabled={pending}>{pending ? "处理中…" : "上传校验"}</button></form><div className="template-links"><h3>标准模板</h3>{kinds.map((item) => <a href={`/api/teacher/imports/templates/${item.key}`} key={item.key}><Download />{item.label}</a>)}</div>{message && <p className="manager-message" role="status">{message}</p>}</section><section className="batch-panel"><header><h2>导入批次</h2><span>{batches.length} 个</span></header>{batches.length === 0 && <div className="admin-empty"><FileSpreadsheet /><b>尚无导入记录</b><p>先下载模板并上传一份数据。</p></div>}{batches.map((batch) => <article className={`import-batch ${batch.status.toLowerCase()}`} key={batch.id}><button className="batch-summary" onClick={() => setExpanded(expanded === batch.id ? null : batch.id)}><span>{batch.status === "REJECTED" ? <XCircle /> : <CheckCircle2 />}</span><div><b>{batch.fileName}</b><small>{new Date(batch.createdAt).toLocaleString("zh-CN")} · {batch.kind}</small></div><strong>{batch.validRows}/{batch.totalRows} 有效</strong><em>{batch.status === "COMMITTED" ? "已导入" : batch.status === "VALIDATED" ? "待确认" : "有错误"}</em></button>{expanded === batch.id && <div className="batch-detail"><div className="admin-table import-table"><div className="admin-table-head"><span>行</span><span>状态</span><span>数据预览</span><span>错误</span></div>{batch.rows.slice(0, 30).map((row) => <div key={row.id}><span>{row.rowNumber}</span><b className={row.status === "INVALID" ? "status-error" : "status-active"}>{row.status === "INVALID" ? "无效" : row.status === "IMPORTED" ? "已写入" : "有效"}</b><code>{JSON.stringify(row.raw)}</code><span>{Array.isArray(row.errors) ? row.errors.join("；") : "-"}</span></div>)}</div>{batch.status === "VALIDATED" && <button className="primary-button" disabled={pending} onClick={() => void commit(batch.id)}>确认正式导入</button>}{batch.status === "REJECTED" && <p>请按红色错误修正源文件后重新上传。当前批次未写入正式数据。</p>}</div>}</article>)}</section></div>;
+}
