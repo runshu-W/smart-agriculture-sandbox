@@ -30,7 +30,7 @@ test("industry shock plays in sync, survives pause/reload, and saves authorized 
     for (const page of [t, s, m, screen]) { page.on("pageerror", error => errors.push(error.message)); page.on("console", message => { if (message.type() === "error" && !/net::ERR_FAILED|Failed to fetch|Failed to load resource/.test(message.text())) consoleErrors.push(message.text()); }); }
     await screen.setViewportSize({ width: 1920, height: 1080 });
     await Promise.all([t.goto(`/teacher/classroom/${id}`), s.goto(`/student/classroom/${id}`), m.goto(`/student/classroom/${id}`), screen.goto(`/classroom/${id}/screen`)]);
-    await expect(t).toHaveTitle(/智慧农业/);
+    await expect(t).toHaveTitle(/农情润心虚拟仿真沙盘/);
     await expect(t.getByRole("button", { name: "开始冲击", exact: true })).toBeDisabled();
     await s.getByRole("button", { name: "加入本次课堂" }).click(); await m.getByRole("button", { name: "加入本次课堂" }).click();
     await expect(s.getByTestId("impact-audience")).toHaveText("3,000");
@@ -92,6 +92,18 @@ test("industry shock plays in sync, survives pause/reload, and saves authorized 
     await command("pause");
     await expect(screen.getByTestId("impact-scene")).toHaveAttribute("data-moment", "observing");
     for (const page of [t, s, m, screen]) await expect(page.locator(".classroom-status")).toHaveText("课堂已暂停");
+    // Paused/revisited events must be visually present, not frozen at opacity zero.
+    for (const page of [s, m, screen]) {
+      for (const selector of [".impact-news", ".impact-call", ".impact-chat", ".impact-comments p"]) {
+        await expect(page.locator(selector).first()).toHaveCSS("opacity", "1");
+      }
+    }
+    await s.reload();
+    await expect(s.locator(".impact-news")).toHaveCSS("opacity", "1");
+    await expect(s.locator(".impact-chat")).toHaveCSS("opacity", "1");
+    await expect(s.locator(".impact-studio img")).toBeVisible();
+    const guideBottom = await screen.locator(".impact-guide").evaluate(element => element.getBoundingClientRect().bottom);
+    expect(guideBottom).toBeLessThanOrEqual(1080);
     await t.screenshot({ path: join(output, "行业冲击-教师全景.png"), fullPage: true });
     await s.screenshot({ path: join(output, "行业冲击-学生观察.png"), fullPage: true });
     await screen.screenshot({ path: join(output, "行业冲击-大屏全景.png") });

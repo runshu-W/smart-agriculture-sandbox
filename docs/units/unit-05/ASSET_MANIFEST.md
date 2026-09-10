@@ -80,3 +80,10 @@
 完成实现：未新增位图，继续使用统一农小智 portrait-v002.png。新增倒计时900Hz短音与映射正误音通过 Web Audio 按需合成，无外部音频请求；原张大叔两段TTS音频保留。档案HTML自包含样式与文字地图，离线保存/打印无需加载外部资源。
 
 最终素材QA：99文件/93引用审计通过。地图、投票、档案截图位于工作区outputs及Chrome/Tablet子目录；未将测试学生截图混入正式教学素材。
+
+## 2026-09-10 直播间重设计素材规划
+新增 U05-SCN-IMPACT-02：public/assets/unit-05/scenes/impact-live-studio-v002.webp，摄影风格的完整助农直播现场，含成年女主播、同一光线下的西瓜和直播道具，不再叠加站立人物贴图。此场景按第五单元西瓜冲击脚本构图，第四单元原直播背景继续独立保留，避免影响其他关卡。另生成 U05-PRODUCT-MELON-02：public/assets/unit-05/props/watermelon-v002.webp，替换示意SVG为产品摄影图。复用既有农小智 portrait-v002.png、张大叔TTS和lucide图标。UI概念图保存在工作区 outputs/design，不用于网页背景。状态：planned。
+
+产出完成（built-in image_gen）：public/assets/unit-05/scenes/impact-live-studio-v002.webp（1536×1024，325016字节），public/assets/unit-05/props/watermelon-v002.webp（400×400，60020字节），public/assets/unit-05/scenes/ai-host-news-v002.webp（768×512，46534字节，模拟新闻配图）。原始摄影素材独立生成，使用sharp等比缩小/编码WebP；没有从UI概念图裁切图片。新增3张合计约422KiB。场景与产品为第五单元专用；新闻配图可供后续行业变化场景复用，本次只有U05消费。
+
+完成验证（2026-09-10）：lint 0错误（prisma.config.ts保留原有unused变量警告）；typecheck通过；Vitest 12文件/60测试通过；build通过；素材审计102文件/96引用通过。Playwright使用本机Edge（Browser插件不可用），在隔离演练数据库运行行业冲击与班级汇总两条回归流程通过。验证1920×1080大屏、1440px教师/学生、390×844手机；大屏农小智引导完整位于1080高度内，各端无横向溢出。验证人数时序、音频播放/暂停、刷新恢复、事件回看、观察记录离线补传与授权去重；额外验证暂停/重进后卡片与弹幕opacity为1。已使用view_image逐一查看最终大屏、学生与手机截图，并与概念对照，完成构图、配色、字体、图片与消息层次核对。摄影主体为静态情境图，未实现真人口型视频；课堂交互动态保留。
