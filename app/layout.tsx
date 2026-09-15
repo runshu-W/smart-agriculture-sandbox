@@ -7,6 +7,7 @@ import "./classroom-summary.css";
 import "./classroom-decision.css";
 import "./classroom-framework.css";
 import "./classroom-completion.css";
+import "./classroom-controls.css";
 
 export const metadata: Metadata = {
   title: PLATFORM_NAME,

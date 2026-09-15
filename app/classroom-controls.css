@@ -1,0 +1,12 @@
+/* Keep the shared teacher controls available in the projection view. */
+.classroom-room.classroom-screen .classroom-body{grid-template-columns:minmax(0,1fr) 320px}
+.classroom-screen .classroom-control-panel{min-width:0;align-self:start}
+.classroom-screen .decision-room{display:block}
+.classroom-screen .decision-top{flex-direction:row;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+@media(max-width:1000px){
+  .classroom-room.classroom-screen .classroom-body{grid-template-columns:minmax(0,1fr)}
+  .classroom-screen .classroom-control-panel{grid-row:1}
+}
+@media(max-width:650px){
+  .classroom-screen .decision-top{flex-direction:column;align-items:stretch}
+}

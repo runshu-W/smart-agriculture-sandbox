@@ -48,7 +48,7 @@ export function ClassroomLobby({ initial, teacher }: { initial: LobbyData; teach
     <div className="classroom-section-heading"><h2>当前课堂</h2><span>{active.length} 节开放中 · 自动更新</span></div>
     {active.length ? <div className="classroom-cards">{active.map(item => <LessonCard key={item.id} item={item} teacher={teacher} />)}</div> : <div className="classroom-empty"><UsersRound size={38} /><h3>{teacher ? "还没有开放的课堂" : "等待老师开启课堂"}</h3><p>{teacher ? "创建后可查看学生到场情况，再开始授课。" : "老师开课后会自动出现在这里，不需要完成前面的自主关卡。"}</p><span className="classroom-pulse" />{!data.classes.length && <p>当前账号尚未关联有效班级，请联系教师。</p>}</div>}
     <section className="classroom-outline"><span className="classroom-eyebrow">这节课，我们将一起经历</span><div>{CLASSROOM_STAGES.map((stage, index) => <article key={stage.key}><b>0{index + 1}</b><strong>{stage.title}</strong><small>{stage.subtitle}</small></article>)}</div></section>
-    {!!ended.length && <><div className="classroom-section-heading"><h2>最近结束的课堂</h2><span>记录已保留</span></div><div className="classroom-cards">{ended.map(item => <LessonCard key={item.id} item={item} teacher={teacher} />)}</div></>}
+    {teacher && !!ended.length && <><div className="classroom-section-heading"><h2>最近结束的课堂</h2><span>记录已保留</span></div><div className="classroom-cards">{ended.map(item => <LessonCard key={item.id} item={item} teacher={teacher} />)}</div></>}
     <p className="classroom-footnote">当前开放课堂候场、阶段同步、行业冲击、班级观察统计与三条路径参考。角色决策与协作任务将按后续步骤开放。</p>
   </main>;
 }

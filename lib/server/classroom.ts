@@ -26,7 +26,7 @@ export async function requireLesson(id: string, teacherOnly = false, shareReads 
 export async function listClassrooms(teacher = false) {
   const actor = await requireActor(teacher ? Role.TEACHER : Role.STUDENT);
   const classes = (teacher ? actor.taughtClasses : actor.enrollments).filter(item => !item.classRoom.isArchived).map(item => ({ id: item.classId, name: item.classRoom.name }));
-  const lessons = await db.liveLesson.findMany({ where: { classId: { in: classes.map(item => item.id) } }, orderBy: { createdAt: "desc" }, take: 30, include: { classRoom: { select: { name: true } } } });
+  const lessons = await db.liveLesson.findMany({ where: { classId: { in: classes.map(item => item.id) }, ...(!teacher ? { status: { not: "ENDED" as const } } : {}) }, orderBy: { createdAt: "desc" }, take: 30, include: { classRoom: { select: { name: true } } } });
   return { classes, lessons: lessons.map(item => ({ id: item.id, className: item.classRoom.name, rehearsal: item.rehearsal, status: item.status, stage: item.stage, createdAt: item.createdAt.toISOString() })) };
 }
 
