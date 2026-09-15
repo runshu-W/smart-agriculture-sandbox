@@ -7,6 +7,7 @@ const localIpv4Origins = Object.values(networkInterfaces())
   .map((address) => address.address);
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   allowedDevOrigins: [...new Set(["127.0.0.1", "localhost", ...localIpv4Origins])],
   experimental: {
     optimizePackageImports: ["lucide-react"],

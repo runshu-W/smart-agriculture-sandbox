@@ -9,11 +9,12 @@ function createClient() {
   return new PrismaClient({
     adapter: new PrismaPg({
       connectionString,
-      max: process.env.NODE_ENV === "production" ? 10 : 1,
+      // Prisma Dev uses a single local connection even with a production build.
+      max: Number(process.env.DATABASE_POOL_MAX ?? (process.env.NODE_ENV === "production" ? 10 : 1)),
     }),
   });
 }
 
 export const db = globalForPrisma.prisma ?? createClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+globalForPrisma.prisma = db;

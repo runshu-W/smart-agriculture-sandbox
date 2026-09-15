@@ -12,7 +12,15 @@ export async function POST(request: Request) {
     const source = inferSource(kind, String(form.get("source") ?? "")); const parsed = await readImportFile(file);
     const duplicate = await db.importBatch.findUnique({ where: { classId_checksum: { classId, checksum: parsed.checksum } } });
     if (duplicate) return NextResponse.json({ error: `相同文件已于 ${duplicate.createdAt.toLocaleString("zh-CN")} 上传`, batchId: duplicate.id }, { status: 409 });
-    const rows = validateImportRows(kind, parsed.rows, source); const status = inferStatus(rows); const invalid = rows.filter((row) => row.status === "INVALID").length;
+    const rows = validateImportRows(kind, parsed.rows, source);
+    if (!rows.length) return NextResponse.json({ error: "文件中没有学生或数据记录，请在表头下填写内容" }, { status: 400 });
+    if (kind === "members") {
+      const numbers = rows.map(r => (r.raw as { studentNo: string }).studentNo);
+      const users = await db.user.findMany({ where: { OR: [{ studentNo: { in: numbers } }, { username: { in: numbers } }] }, select: { studentNo: true, username: true } });
+      const occupied = new Set(users.flatMap(u => [u.studentNo, u.username]));
+      for (const row of rows) if (occupied.has((row.raw as { studentNo: string }).studentNo)) { row.status = "INVALID"; row.errors = [...(Array.isArray(row.errors) ? row.errors : []), "该学号或账号已存在，请勿重复导入"]; }
+    }
+    const status = inferStatus(rows); const invalid = rows.filter((row) => row.status === "INVALID").length;
     const batch = await db.importBatch.create({ data: { classId, createdById: actor.userId, kind, source, fileName: file.name, checksum: parsed.checksum, status, totalRows: rows.length, validRows: rows.length - invalid, invalidRows: invalid, errors: invalid ? { message: "存在无效行，修正后重新上传" } : undefined, rows: { create: rows } }, include: { rows: { orderBy: { rowNumber: "asc" } } } });
     return NextResponse.json(batch, { status: 201 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "校验失败" }, { status: 400 }); }

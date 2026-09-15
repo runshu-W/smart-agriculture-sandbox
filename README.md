@@ -71,3 +71,7 @@ npm run build
 ```
 
 详细脚本说明见 [`tools/windows/README.md`](tools/windows/README.md)。需求文档位于 `docs/`，单元需求真相源位于 `docs/unit_details/`。
+
+## Docker 部署
+
+Linux VPS 的独立容器部署、域名接入和备份迁移见 [Docker 部署说明](deploy/README.md)。

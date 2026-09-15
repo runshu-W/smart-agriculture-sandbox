@@ -12,8 +12,8 @@ import { timingOutcome, settleCompletion } from "@/lib/server/completion-state";
 import { settleExpiredDecision } from "@/lib/server/classroom-decision";
 import { TELEMETRY_FIELDS, escapeHtml as e } from "@/lib/classroom-archive";
 
-export async function getClassroomArchive(id: string) {
-  const actor = await requireActor();
+export async function getClassroomArchive(id: string, role?: "STUDENT" | "TEACHER") {
+  const actor = await requireActor(role);
   const initial = await db.liveLesson.findUnique({ where: { id }, include: { classRoom: true } });
   if (!initial) throw new ClassroomError("课堂不存在", 404);
   // Archived classrooms retain read access for their active members and assigned teachers.

@@ -7,8 +7,8 @@ import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
 export function LoginForm({ portal }: { portal: "student" | "teacher" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState(portal === "teacher" ? "teacher-demo" : "student-demo");
-  const [password, setPassword] = useState("SmartAgri2026!");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -29,10 +29,10 @@ export function LoginForm({ portal }: { portal: "student" | "teacher" }) {
   }
 
   return <form className="login-form" onSubmit={submit}>
-    <label><span><UserRound />账号</span><input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
-    <label><span><LockKeyhole />密码</span><input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+    <label><span><UserRound />{portal === "student" ? "学号 / 账号" : "教师账号"}</span><input required placeholder={portal === "student" ? "请输入老师分配的学号" : "请输入教师账号"} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
+    <label><span><LockKeyhole />密码</span><input required autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
     {error && <p className="form-error">{error}</p>}
     <button className="primary-button" disabled={pending} type="submit">{pending ? "正在登录" : portal === "teacher" ? "进入教师管理后台" : "进入学生端"}<ArrowRight /></button>
-    <div className="demo-accounts"><button type="button" onClick={() => { setUsername(portal === "teacher" ? "teacher-demo" : "student-demo"); setPassword("SmartAgri2026!"); }}>使用{portal === "teacher" ? "教师" : "学生"}演示账号</button></div>
+    <p className="login-help">{portal === "student" ? "使用老师分发的学号和密码登录；忘记密码请联系老师重置。" : "使用已有教师账号登录。昵称可在登录后点击左下角姓名修改。"}</p>
   </form>;
 }

@@ -21,7 +21,11 @@ const IDS = {
 };
 
 async function seed() {
-  const demoPasswordHash = await bcrypt.hash("SmartAgri2026!", 12);
+  const demoPassword = process.env.DEMO_PASSWORD ?? "SmartAgri2026!";
+  if (process.env.NODE_ENV === "production" && (demoPassword === "SmartAgri2026!" || demoPassword.length < 16)) {
+    throw new Error("Production initialization requires a new DEMO_PASSWORD of at least 16 characters.");
+  }
+  const demoPasswordHash = await bcrypt.hash(demoPassword, 12);
   await prisma.classRoom.upsert({
     where: { id: IDS.classRoom },
     update: { name: "智慧农业 2026 级 1 班", academicYear: "2026-2027", semester: "第一学期", leaderboardAnonymous: true, isArchived: false },

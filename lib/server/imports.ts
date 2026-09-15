@@ -16,12 +16,12 @@ export type ImportKind = keyof typeof IMPORT_KINDS;
 export type ValidatedRow = { rowNumber: number; raw: Prisma.InputJsonValue; status: ImportRowStatus; errors: Prisma.InputJsonValue | undefined };
 
 export const TEMPLATE_HEADERS = {
-  members: ["学生姓名", "学号", "登录账号", "匿名昵称"],
+  members: ["学号", "学生姓名"],
   metric: ["学生姓名", "学号", "指标编码", "得分", "测评时间", "课次", "阶段", "数据来源"],
 };
 
 export const TEMPLATE_EXAMPLES = {
-  members: ["张小禾", "20260001", "student001", "青禾01"],
+  members: ["20260001", "张小禾"],
   metric: ["张小禾", "20260001", "literacy.political_identity", 72, "2026-09-01", 1, "BASELINE", "TEACHER_UPLOAD"],
 };
 
@@ -41,7 +41,7 @@ function parseCsv(text: string) {
 export async function readImportFile(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const checksum = createHash("sha256").update(buffer).digest("hex");
-  if (file.name.toLowerCase().endsWith(".csv")) return { checksum, rows: parseCsv(buffer.toString("utf8")) as unknown[][] };
+  if (file.name.toLowerCase().endsWith(".csv")) return { checksum, rows: parseCsv(buffer.toString("utf8").replace(/^\uFEFF/, "")) as unknown[][] };
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("仅支持 .xlsx 或 .csv 文件");
   const sheets = await readXlsxFile(buffer);
   return { checksum, rows: (sheets[0]?.data ?? []) as unknown[][] };
@@ -54,12 +54,20 @@ export function validateImportRows(kind: ImportKind, rows: unknown[][], source: 
   if (rows.length < 2) return [];
   const expected = kind === "members" ? TEMPLATE_HEADERS.members : TEMPLATE_HEADERS.metric;
   const actual = rows[0].map(text);
-  if (expected.some((header, index) => actual[index] !== header)) throw new Error(`表头不匹配，应为：${expected.join("、")}`);
+  if (kind === "members" ? (!actual.includes("学号") || !(actual.includes("学生姓名") || actual.includes("姓名"))) : expected.some((header, index) => actual[index] !== header)) throw new Error(`表头不匹配，应为：${expected.join("、")}`);
+  const seen = new Set<string>();
+  if (rows.length > 201 && kind === "members") throw new Error("每次最多导入 200 名学生，请分批上传");
   return rows.slice(1).map((cells, index) => {
     const errors: string[] = [];
     if (kind === "members") {
-      const raw = { displayName: text(cells[0]), studentNo: text(cells[1]), username: text(cells[2]), nickname: text(cells[3]) };
-      if (!raw.displayName) errors.push("缺少学生姓名"); if (!raw.studentNo) errors.push("缺少学号"); if (!raw.username) errors.push("缺少登录账号");
+      const numberCell = cells[actual.indexOf("学号")];
+      const studentNo = text(numberCell);
+      if (typeof numberCell === "number" && !Number.isSafeInteger(numberCell)) errors.push("学号数值精度不足，请将学号列设为文本后重新填写");
+      const raw = { displayName: text(cells[actual.includes("学生姓名") ? actual.indexOf("学生姓名") : actual.indexOf("姓名")]), studentNo, username: studentNo, nickname: text(cells[actual.indexOf("匿名昵称")]) };
+      if (!raw.displayName || raw.displayName.length > 30) errors.push("学生姓名请填写 1–30 个字符");
+      if (!/^[a-zA-Z0-9_-]{3,24}$/.test(studentNo)) errors.push("学号须为 3–24 位字母、数字、下划线或短横线，请将 Excel 学号列设为文本");
+      if (seen.has(studentNo)) errors.push("文件内学号重复"); seen.add(studentNo);
+      if (raw.nickname.length > 30) errors.push("匿名昵称不能超过 30 个字符");
       return { rowNumber: index + 2, raw, status: errors.length ? ImportRowStatus.INVALID : ImportRowStatus.VALID, errors: errors.length ? errors : undefined };
     }
     const raw = { studentName: text(cells[0]), studentNo: text(cells[1]), metricKey: text(cells[2]), value: Number(cells[3]), measuredAt: dateText(cells[4]), lessonIndex: Number(cells[5]) || null, phase: text(cells[6]).toUpperCase(), source: text(cells[7]).toUpperCase() || source };

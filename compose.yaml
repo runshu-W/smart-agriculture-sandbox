@@ -1,0 +1,99 @@
+name: ${COMPOSE_PROJECT_NAME:-smart-agriculture}
+
+x-database-env: &database-env
+  DATABASE_URL: postgresql://smart_agri:${POSTGRES_PASSWORD:?Generate deploy/.env first}@db:5432/smart_agri
+  DATABASE_POOL_MAX: "5"
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
+    environment:
+      POSTGRES_USER: smart_agri
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate deploy/.env first}
+      POSTGRES_DB: smart_agri
+    volumes:
+      # PostgreSQL 18 stores versioned data underneath /var/lib/postgresql.
+      - postgres_data:/var/lib/postgresql
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=128MB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U smart_agri -d smart_agri"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    shm_size: 128m
+    stop_grace_period: 60s
+    logging: *logging
+    networks: [backend]
+
+  app:
+    image: ${APP_IMAGE:-smart-agriculture-app:local}
+    build:
+      context: .
+      target: runner
+    environment:
+      <<: *database-env
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=768
+    ports:
+      - "127.0.0.1:${APP_PORT:-3001}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    mem_limit: 1024m
+    cpus: 1.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    networks: [backend]
+
+  migrate:
+    image: ${TOOLS_IMAGE:-smart-agriculture-tools:local}
+    build:
+      context: .
+      target: tools
+    profiles: [ops]
+    environment:
+      <<: *database-env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["npm", "run", "db:deploy"]
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.5
+    logging: *logging
+    networks: [backend]
+
+  initialize:
+    image: ${TOOLS_IMAGE:-smart-agriculture-tools:local}
+    profiles: [ops]
+    environment:
+      <<: *database-env
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["node", "deploy/init-empty.mjs"]
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.5
+    logging: *logging
+    networks: [backend]
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    driver: bridge

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ImportRowStatus, MetricPhase, Role, type DataSource } from "@/generated/prisma/client";
+import { ImportRowStatus, MetricPhase, type DataSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { hashPassword, requireTeacherContext } from "@/lib/server/auth";
+import { requireTeacherContext } from "@/lib/server/auth";
 import { writeAudit } from "@/lib/server/audit";
 
 const schema = z.object({ overwrite: z.boolean().default(false) });
-const DEFAULT_PASSWORD = "SmartAgri2026!";
+import { insertStudents, prepareStudent, type StudentIdentity } from "@/lib/server/student-accounts";
 
 export async function POST(request: Request, context: { params: Promise<{ batchId: string }> }) {
   try {
@@ -16,18 +16,21 @@ export async function POST(request: Request, context: { params: Promise<{ batchI
     const actor = await requireTeacherContext(batch.classId);
     if (batch.status !== "VALIDATED" || batch.invalidRows > 0) return NextResponse.json({ error: "该批次未通过完整校验" }, { status: 409 });
     if (batch.kind === "members") {
-      const passwordHash = await hashPassword(DEFAULT_PASSWORD);
-      await db.$transaction(async (tx) => {
-        for (const row of batch.rows) {
-          const raw = row.raw as { displayName: string; studentNo: string; username: string; nickname?: string };
-          const existing = await tx.user.findFirst({ where: { OR: [{ username: raw.username }, { studentNo: raw.studentNo }] } });
-          if (existing) throw new Error(`第 ${row.rowNumber} 行账号或学号已存在`);
-          const user = await tx.user.create({ data: { username: raw.username, displayName: raw.displayName, nickname: raw.nickname || null, studentNo: raw.studentNo, passwordHash, role: Role.STUDENT } });
-          await tx.enrollment.create({ data: { classId: batch.classId, userId: user.id } });
-          await tx.importRow.update({ where: { id: row.id }, data: { status: ImportRowStatus.IMPORTED } });
-        }
-        await tx.importBatch.update({ where: { id: batch.id }, data: { status: "COMMITTED", committedAt: new Date() } });
-      });
+      const identities = batch.rows.map(row => row.raw as StudentIdentity);
+      const numbers = identities.map(i => i.studentNo);
+      if (identities.length > 200 || new Set(numbers).size !== numbers.length) throw new Error("学号重复或超过每批 200 人上限");
+      const existing = await db.user.findFirst({ where: { OR: [{ username: { in: numbers } }, { studentNo: { in: numbers } }] } });
+      if (existing) return NextResponse.json({ error: "名单中有已存在的学号或账号，请修正后重新上传" }, { status: 409 });
+      const prepared: Awaited<ReturnType<typeof prepareStudent>>[] = [];
+      for (const identity of identities) prepared.push(await prepareStudent(identity));
+      await db.$transaction(async tx => {
+        const claimed = await tx.importBatch.updateMany({ where: { id: batch.id, status: "VALIDATED" }, data: { status: "COMMITTED", committedAt: new Date() } });
+        if (claimed.count !== 1) throw new Error("该批次已导入，请勿重复提交");
+        await insertStudents(tx, batch.classId, prepared);
+        await tx.importRow.updateMany({ where: { batchId: batch.id }, data: { status: "IMPORTED" } });
+        await tx.auditLog.create({ data: { actorId: actor.userId, classId: batch.classId, entityType: "ImportBatch", entityId: batch.id, action: "COMMIT", after: { kind: batch.kind, rows: batch.totalRows } } });
+      }, { timeout: 20000 });
+      return NextResponse.json({ ok: true, credentials: prepared.map(p => p.credential) }, { headers: { "Cache-Control": "no-store" } });
     } else {
       const enrolled = await db.enrollment.findMany({ where: { classId: batch.classId, status: "ACTIVE" }, include: { user: true } });
       const prepared = batch.rows.map((row) => { const raw = row.raw as { studentName: string; studentNo: string; metricKey: string; value: number; measuredAt: string; lessonIndex: number | null; phase: string; source: string }; const member = enrolled.find((item) => (raw.studentNo && item.user.studentNo === raw.studentNo) || (!raw.studentNo && item.user.displayName === raw.studentName)); if (!member) throw new Error(`第 ${row.rowNumber} 行找不到班级成员`); return { row, raw, member }; });
@@ -44,6 +47,6 @@ export async function POST(request: Request, context: { params: Promise<{ batchI
       });
     }
     await writeAudit({ actorId: actor.userId, classId: batch.classId, entityType: "ImportBatch", entityId: batch.id, action: "COMMIT", after: { kind: batch.kind, rows: batch.totalRows } });
-    return NextResponse.json({ ok: true, defaultPassword: batch.kind === "members" ? DEFAULT_PASSWORD : undefined });
+    return NextResponse.json({ ok: true });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "导入失败" }, { status: 400 }); }
 }

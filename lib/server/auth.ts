@@ -8,7 +8,12 @@ import bcrypt from "bcryptjs";
 import { Role } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
+// Keep the legacy cookie readable during migration; each portal now owns its session.
 export const SESSION_COOKIE = "smart-agri-session";
+export const SESSION_COOKIES = {
+  STUDENT: "smart-agri-student-session",
+  TEACHER: "smart-agri-teacher-session",
+} as const;
 const SESSION_DAYS = 7;
 
 export class AuthorizationError extends Error {
@@ -28,10 +33,11 @@ export async function authenticate(username: string, password: string, expectedR
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const cookieStore = await cookies();
-  const previousToken = cookieStore.get(SESSION_COOKIE)?.value;
+  const cookieName = SESSION_COOKIES[user.role];
+  const previousToken = cookieStore.get(cookieName)?.value;
   if (previousToken) await db.authSession.deleteMany({ where: { tokenHash: hashToken(previousToken) } });
   await db.authSession.create({ data: { tokenHash: hashToken(token), userId: user.id, expiresAt } });
-  cookieStore.set(SESSION_COOKIE, token, {
+  cookieStore.set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -41,15 +47,20 @@ export async function authenticate(username: string, password: string, expectedR
   return { id: user.id, role: user.role };
 }
 
-export async function logout() {
+export async function logout(role: Role) {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = cookieStore.get(SESSION_COOKIES[role])?.value;
   if (token) await db.authSession.deleteMany({ where: { tokenHash: hashToken(token) } });
-  cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(SESSION_COOKIES[role]);
+  // Remove a legacy session only when it belongs to the portal being signed out.
+  const legacyToken = cookieStore.get(SESSION_COOKIE)?.value;
+  if (legacyToken && (await actorForToken(legacyToken))?.role === role) {
+    await db.authSession.deleteMany({ where: { tokenHash: hashToken(legacyToken) } });
+    cookieStore.delete(SESSION_COOKIE);
+  }
 }
 
-export const getCurrentActor = cache(async function getCurrentActor() {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+const actorForToken = cache(async function actorForToken(token: string | undefined) {
   if (!token) return null;
   const session = await db.authSession.findUnique({
     where: { tokenHash: hashToken(token) },
@@ -66,14 +77,24 @@ export const getCurrentActor = cache(async function getCurrentActor() {
   return session.user;
 });
 
+export const getCurrentActor = cache(async function getCurrentActor(role?: Role) {
+  const cookieStore = await cookies();
+  const names = role ? [SESSION_COOKIES[role], SESSION_COOKIE] : [SESSION_COOKIES.STUDENT, SESSION_COOKIES.TEACHER, SESSION_COOKIE];
+  for (const name of names) {
+    const actor = await actorForToken(cookieStore.get(name)?.value);
+    if (actor && (!role || actor.role === role)) return actor;
+  }
+  return null;
+});
+
 export async function requireActor(role?: Role) {
-  const actor = await getCurrentActor();
+  const actor = await getCurrentActor(role);
   if (!actor || (role && actor.role !== role)) throw new AuthorizationError();
   return actor;
 }
 
 export async function requirePageActor(role: Role) {
-  const actor = await getCurrentActor();
+  const actor = await getCurrentActor(role);
   if (!actor) redirect(`${role === Role.TEACHER ? "/teacher-login" : "/student-login"}?next=${role === Role.TEACHER ? "/teacher/dashboard" : "/student"}`);
   if (actor.role !== role) redirect(actor.role === Role.TEACHER ? "/teacher/dashboard" : "/student");
   return actor;

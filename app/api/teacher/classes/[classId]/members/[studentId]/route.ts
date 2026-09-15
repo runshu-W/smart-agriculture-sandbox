@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -11,10 +12,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ cl
     const { classId, studentId } = await params; const actor = await requireTeacherContext(classId); const input = schema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: "操作格式不正确" }, { status: 400 });
     const enrollment = await db.enrollment.findUniqueOrThrow({ where: { userId_classId: { userId: studentId, classId } } });
-    if (input.data.action === "reset-password") await db.user.update({ where: { id: studentId }, data: { passwordHash: await hashPassword("SmartAgri2026!") } });
-    else await db.enrollment.update({ where: { id: enrollment.id }, data: { status: input.data.action === "archive" ? "ARCHIVED" : "ACTIVE" } });
+    if (input.data.action === "reset-password") {
+      const user = await db.user.findUniqueOrThrow({ where: { id: studentId } });
+      if (user.role !== "STUDENT") throw new Error("仅可重置学生密码");
+      const password = randomBytes(10).toString("hex"); const passwordHash = await hashPassword(password);
+      await db.$transaction(async tx => {
+        await tx.user.update({ where: { id: studentId }, data: { passwordHash } });
+        await tx.authSession.deleteMany({ where: { userId: studentId } });
+        await tx.auditLog.create({ data: { actorId: actor.userId, classId, entityType: "User", entityId: studentId, action: "RESET_PASSWORD" } });
+      });
+      return NextResponse.json({ ok: true, credentials: [{ displayName: user.displayName, studentNo: user.studentNo ?? "", username: user.username, password }] }, { headers: { "Cache-Control": "no-store" } });
+    }
+    await db.enrollment.update({ where: { id: enrollment.id }, data: { status: input.data.action === "archive" ? "ARCHIVED" : "ACTIVE" } });
     await writeAudit({ actorId: actor.userId, classId, entityType: "Enrollment", entityId: enrollment.id, action: input.data.action.toUpperCase(), before: { status: enrollment.status }, after: { status: input.data.action } });
-    return NextResponse.json({ ok: true, defaultPassword: input.data.action === "reset-password" ? "SmartAgri2026!" : undefined });
+    return NextResponse.json({ ok: true });
   } catch (error) { return NextResponse.json({ error: error instanceof AuthorizationError ? error.message : "成员操作失败" }, { status: error instanceof AuthorizationError ? 403 : 500 }); }
 }
 

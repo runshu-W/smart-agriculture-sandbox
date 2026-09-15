@@ -14,7 +14,7 @@ import { activityElapsed, assignGroups } from "@/lib/classroom-completion";
 import { completionClock, completionSnapshot, closeTimingVote, settleCompletion } from "@/lib/server/completion-state";
 
 export async function requireLesson(id: string, teacherOnly = false, shareReads = false) {
-  const actor = await requireActor(teacherOnly ? Role.TEACHER : undefined);
+  const actor = await requireActor(teacherOnly ? Role.TEACHER : Role.STUDENT);
   const readLesson = () => db.liveLesson.findUnique({ where: { id }, include: { classRoom: true, teacher: { select: { displayName: true } } } });
   const lesson = await (shareReads ? classroomRead(`lesson:${id}`, readLesson) : readLesson());
   if (!lesson) throw new ClassroomError("课堂不存在", 404);

@@ -22,3 +22,8 @@ tmp/
 .packages/
 *.tsbuildinfo
 public/assets/**/source/
+
+# Deployment secrets and database backups
+!deploy/.env.example
+deploy/backups/
+*.dump
